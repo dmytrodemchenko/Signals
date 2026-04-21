@@ -3,7 +3,7 @@
  * stale loads are aborted via AbortSignal. Exposes value/error/status as
  * read signals plus imperative set/update/reload/destroy.
  */
-import { signal, computed, effect, untracked, type ReadSignal } from "./signals";
+import { signal, computed, effect, untracked, type ReadSignal } from "./signals.js";
 
 export type ResourceStatus = "idle" | "loading" | "resolved" | "error";
 

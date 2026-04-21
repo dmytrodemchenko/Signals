@@ -4,7 +4,7 @@
  * the previous { source, value } so consumers can reconcile state across
  * source changes (e.g. preserve a selection when the underlying list mutates).
  */
-import { signal, computed, effect, untracked, type WriteSignal } from "./signals";
+import { signal, computed, effect, untracked, type WriteSignal } from "./signals.js";
 
 export type LinkedSignal<T> = WriteSignal<T>;
 
