@@ -93,11 +93,3 @@ npm install
 npm run check
 npm run build
 ```
-
-## Publishing
-
-```bash
-npm publish
-```
-
-Before publishing, confirm the package name in `package.json` is the one you want and is available on npm.
