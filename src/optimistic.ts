@@ -1,4 +1,4 @@
-import { batch, computed, signal, type ReadSignal, type WriteSignal } from "./signals.js";
+import { batch, computed, signal, type ReadSignal, type WriteSignal } from './signals.js';
 
 export type OptimisticPatch<T> = T | ((current: T) => T);
 
@@ -21,11 +21,11 @@ interface OptimisticLayer<T> {
 }
 
 function toUpdater<T>(patch: OptimisticPatch<T>): (current: T) => T {
-  return typeof patch === "function" ? (patch as (current: T) => T) : () => patch;
+  return typeof patch === 'function' ? (patch as (current: T) => T) : () => patch;
 }
 
 function applyToSignal<T>(target: WriteSignal<T>, patch: OptimisticPatch<T>) {
-  if (typeof patch === "function") {
+  if (typeof patch === 'function') {
     target.update(patch as (current: T) => T);
     return;
   }

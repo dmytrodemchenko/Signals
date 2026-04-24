@@ -4,7 +4,7 @@
  * the previous { source, value } so consumers can reconcile state across
  * source changes (e.g. preserve a selection when the underlying list mutates).
  */
-import { signal, computed, effect, untracked, type WriteSignal } from "./signals.js";
+import { signal, computed, effect, untracked, type WriteSignal } from './signals.js';
 
 export type LinkedSignal<T> = WriteSignal<T>;
 
@@ -16,12 +16,10 @@ export interface LinkedSignalOptions<S, T> {
 
 export function linkedSignal<T>(computation: () => T): LinkedSignal<T>;
 export function linkedSignal<S, T>(options: LinkedSignalOptions<S, T>): LinkedSignal<T>;
-export function linkedSignal<S, T>(
-  arg: (() => T) | LinkedSignalOptions<S, T>,
-): LinkedSignal<T> {
+export function linkedSignal<S, T>(arg: (() => T) | LinkedSignalOptions<S, T>): LinkedSignal<T> {
   const opts: LinkedSignalOptions<unknown, T> =
-    typeof arg === "function"
-      ? { source: arg as () => unknown, computation: (s) => s as unknown as T }
+    typeof arg === 'function'
+      ? { source: arg, computation: (s) => s as T }
       : (arg as LinkedSignalOptions<unknown, T>);
 
   const equal = opts.equal ?? Object.is;

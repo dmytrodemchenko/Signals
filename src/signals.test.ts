@@ -1,61 +1,52 @@
 /**
- * Lightweight self-tests for the signals library.
- * Run from the demo page; results are returned as an array.
+ * Vitest tests for the signals library.
  */
-import { signal, computed, effect, batch, untracked, isSignal } from "./signals.js";
-import { linkedSignal } from "./linked-signal.js";
-import { optimistic } from "./optimistic.js";
-import { resource } from "./resource.js";
+import { describe, it, expect } from 'vitest';
+import { signal, computed, effect, batch, untracked, isSignal } from './signals.js';
+import { linkedSignal } from './linked-signal.js';
+import { optimistic } from './optimistic.js';
+import { resource } from './resource.js';
 
-export type TestResult = { name: string; passed: boolean; error?: string };
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function assert(cond: unknown, msg: string) {
-  if (!cond) throw new Error(msg);
-}
-
-function test(name: string, fn: () => void, results: TestResult[]) {
-  try {
-    fn();
-    results.push({ name, passed: true });
-  } catch (e) {
-    results.push({ name, passed: false, error: (e as Error).message });
-  }
-}
-
-export function runTests(): TestResult[] {
-  const results: TestResult[] = [];
-
-  test("signal stores and updates", () => {
+describe('signal', () => {
+  it('stores and updates', () => {
     const s = signal(1);
-    assert(s() === 1, "initial");
+    expect(s()).toBe(1);
     s.set(2);
-    assert(s() === 2, "after set");
+    expect(s()).toBe(2);
     s.update((v) => v + 10);
-    assert(s() === 12, "after update");
-  }, results);
+    expect(s()).toBe(12);
+  });
 
-  test("signal supports custom equality for set and update", () => {
-    const s = signal({ id: 1, label: "a" }, {
-      equal: (a, b) => a.id === b.id,
-    });
+  it('supports custom equality for set and update', () => {
+    const s = signal(
+      { id: 1, label: 'a' },
+      {
+        equal: (a, b) => a.id === b.id,
+      }
+    );
     const seen: string[] = [];
     const dispose = effect(() => {
       seen.push(s().label);
     });
 
-    s.set({ id: 1, label: "b" });
-    s.update((value) => ({ ...value, label: "c" }));
-    assert(seen.join(",") === "a", `equal writes should be skipped, got ${seen.join(",")}`);
+    s.set({ id: 1, label: 'b' });
+    s.update((value) => ({ ...value, label: 'c' }));
+    expect(seen.join(',')).toBe('a');
 
-    s.set({ id: 2, label: "d" });
-    assert(seen.join(",") === "a,d", `unequal write should notify, got ${seen.join(",")}`);
+    s.set({ id: 2, label: 'd' });
+    expect(seen.join(',')).toBe('a,d');
     dispose();
-  }, results);
+  });
 
-  test("signal mutate still notifies with custom equality", () => {
-    const s = signal({ id: 1, count: 0 }, {
-      equal: (a, b) => a.id === b.id,
-    });
+  it('mutate still notifies with custom equality', () => {
+    const s = signal(
+      { id: 1, count: 0 },
+      {
+        equal: (a, b) => a.id === b.id,
+      }
+    );
     const seen: number[] = [];
     const dispose = effect(() => {
       seen.push(s().count);
@@ -65,24 +56,26 @@ export function runTests(): TestResult[] {
       value.count += 1;
     });
 
-    assert(seen.join(",") === "0,1", `mutate should still notify, got ${seen.join(",")}`);
+    expect(seen.join(',')).toBe('0,1');
     dispose();
-  }, results);
+  });
 
-  test("signal exposes a stable readonly view", () => {
+  it('exposes a stable readonly view', () => {
     const s = signal(1);
     const readonlyA = s.asReadonly();
     const readonlyB = s.asReadonly();
 
-    assert(readonlyA === readonlyB, "readonly view should be stable");
-    assert(readonlyA() === 1, "readonly view reads current value");
+    expect(readonlyA).toBe(readonlyB);
+    expect(readonlyA()).toBe(1);
     s.set(5);
-    assert(readonlyA() === 5, "readonly view stays in sync");
-    assert(isSignal(readonlyA), "readonly view should be branded as a signal");
-    assert(!("set" in (readonlyA as object)), "readonly view should not expose writes");
-  }, results);
+    expect(readonlyA()).toBe(5);
+    expect(isSignal(readonlyA)).toBe(true);
+    expect('set' in (readonlyA as object)).toBe(false);
+  });
+});
 
-  test("computed memoizes and invalidates", () => {
+describe('computed', () => {
+  it('memoizes and invalidates', () => {
     const a = signal(2);
     const b = signal(3);
     let calls = 0;
@@ -90,26 +83,161 @@ export function runTests(): TestResult[] {
       calls++;
       return a() + b();
     });
-    assert(sum() === 5 && calls === 1, "first eval");
-    assert(sum() === 5 && calls === 1, "memoized");
+    expect(sum()).toBe(5);
+    expect(calls).toBe(1);
+    expect(sum()).toBe(5);
+    expect(calls).toBe(1);
     a.set(10);
-    assert(sum() === 13 && calls === 2, "recomputes after change");
-  }, results);
+    expect(sum()).toBe(13);
+    expect(calls).toBe(2);
+  });
 
-  test("effect runs initially and on dep change", () => {
-    const s = signal("hi");
+  it('of computed propagates', () => {
+    const n = signal(2);
+    const sq = computed(() => n() * n());
+    const plus1 = computed(() => sq() + 1);
+    expect(plus1()).toBe(5);
+    n.set(3);
+    expect(plus1()).toBe(10);
+  });
+
+  it('detects cycles and throws', () => {
+    const a = signal(1);
+    // eslint-disable-next-line prefer-const
+    let c2: (() => number) | undefined;
+    const c1: () => number = computed(() => a() + (c2 !== undefined ? c2() : 0));
+    c2 = computed(() => c1() + 1);
+    expect(() => c2()).toThrow();
+  });
+
+  it('glitch-free push/pull: does not run effects if computed value is unchanged', () => {
+    const count = signal(1);
+    const isPositive = computed(() => count() > 0);
+    let effectRuns = 0;
+
+    const dispose = effect(() => {
+      isPositive();
+      effectRuns++;
+    });
+
+    expect(effectRuns).toBe(1); // initial run
+
+    count.set(2); // count changed, but isPositive is still true
+    expect(effectRuns).toBe(1); // effect should NOT run again!
+    dispose();
+  });
+});
+
+describe('effect', () => {
+  it('runs initially and on dep change', () => {
+    const s = signal('hi');
     const log: string[] = [];
     const dispose = effect(() => {
       log.push(s());
     });
-    s.set("there");
-    s.set("world");
+    s.set('there');
+    s.set('world');
     dispose();
-    s.set("ignored");
-    assert(log.join(",") === "hi,there,world", `got ${log.join(",")}`);
-  }, results);
+    s.set('ignored');
+    expect(log.join(',')).toBe('hi,there,world');
+  });
 
-  test("batch coalesces updates", () => {
+  it('cleanup runs before re-run and on dispose', () => {
+    const s = signal(0);
+    const log: string[] = [];
+    const dispose = effect(() => {
+      const v = s();
+      log.push(`run:${v}`);
+      return () => log.push(`clean:${v}`);
+    });
+    s.set(1);
+    s.set(2);
+    dispose();
+    expect(log.join(',')).toBe('run:0,clean:0,run:1,clean:1,run:2,clean:2');
+  });
+
+  it('allows signal writes by default', () => {
+    const source = signal(0);
+    const target = signal(0);
+    const dispose = effect(() => {
+      const next = source();
+      if (next > 0) {
+        target.set(next * 10);
+      }
+    });
+    source.set(3);
+    expect(target()).toBe(30);
+    dispose();
+  });
+
+  it('can disallow signal writes', () => {
+    const source = signal(0);
+    const target = signal(0);
+    const dispose = effect(
+      () => {
+        const next = source();
+        if (next > 0) {
+          target.set(next);
+        }
+      },
+      { allowSignalWrites: false }
+    );
+
+    expect(() => source.set(1)).toThrow('Signal writes are not allowed in this effect.');
+    expect(target()).toBe(0);
+    dispose();
+  });
+
+  it('scheduler defers and coalesces reruns', () => {
+    const source = signal(0);
+    const seen: number[] = [];
+    const queue: Array<() => void> = [];
+    const dispose = effect(
+      () => {
+        seen.push(source());
+      },
+      {
+        scheduler: (run) => {
+          queue.push(run);
+        },
+      }
+    );
+
+    expect(seen.join(',')).toBe('0');
+    source.set(1);
+    source.set(2);
+    expect(queue.length).toBe(1);
+    expect(seen.join(',')).toBe('0');
+
+    const run = queue.shift();
+    expect(typeof run).toBe('function');
+    run?.();
+
+    expect(seen.join(',')).toBe('0,2');
+    dispose();
+  });
+
+  it('accepts manualCleanup option without changing disposal', () => {
+    const s = signal(0);
+    const log: string[] = [];
+    const dispose = effect(
+      () => {
+        const v = s();
+        log.push(`run:${v}`);
+        return () => log.push(`clean:${v}`);
+      },
+      { manualCleanup: true }
+    );
+
+    s.set(1);
+    dispose();
+
+    expect(log.join(',')).toBe('run:0,clean:0,run:1,clean:1');
+  });
+});
+
+describe('batch', () => {
+  it('coalesces updates', () => {
     const a = signal(1);
     const b = signal(2);
     let runs = 0;
@@ -123,11 +251,13 @@ export function runTests(): TestResult[] {
       a.set(10);
       b.set(20);
     });
-    assert(runs === 1, `expected 1 batched run, got ${runs}`);
+    expect(runs).toBe(1);
     dispose();
-  }, results);
+  });
+});
 
-  test("untracked does not subscribe", () => {
+describe('untracked', () => {
+  it('does not subscribe', () => {
     const tracked = signal(1);
     const hidden = signal(100);
     let runs = 0;
@@ -138,152 +268,35 @@ export function runTests(): TestResult[] {
     });
     runs = 0;
     hidden.set(200);
-    assert(runs === 0, "should not re-run on untracked change");
+    expect(runs).toBe(0);
     tracked.set(2);
-    assert(runs === 1, "should re-run on tracked change");
+    expect(runs).toBe(1);
     dispose();
-  }, results);
+  });
+});
 
-  test("computed of computed propagates", () => {
-    const n = signal(2);
-    const sq = computed(() => n() * n());
-    const plus1 = computed(() => sq() + 1);
-    assert(plus1() === 5, "initial");
-    n.set(3);
-    assert(plus1() === 10, "propagates");
-  }, results);
+describe('isSignal', () => {
+  it('type guard works', () => {
+    expect(isSignal(signal(0))).toBe(true);
+    expect(isSignal(computed(() => 1))).toBe(true);
+    expect(isSignal(42)).toBe(false);
+    expect(isSignal(() => 1)).toBe(false);
+  });
+});
 
-  test("cycle detection in computed", () => {
-    const a = signal(1);
-    let threw = false;
-    // eslint-disable-next-line prefer-const
-    let c2: () => number;
-    const c1: () => number = computed(() => a() + (c2 ? c2() : 0));
-    c2 = computed(() => c1() + 1);
-    try {
-      c2();
-    } catch {
-      threw = true;
-    }
-    assert(threw, "expected cycle to throw");
-  }, results);
-
-  test("isSignal type guard", () => {
-    assert(isSignal(signal(0)), "writable is signal");
-    assert(isSignal(computed(() => 1)), "computed is signal");
-    assert(!isSignal(42), "number is not signal");
-    assert(!isSignal(() => 1), "plain fn is not signal");
-  }, results);
-
-  test("effect cleanup runs before re-run and on dispose", () => {
-    const s = signal(0);
-    const log: string[] = [];
-    const dispose = effect(() => {
-      const v = s();
-      log.push(`run:${v}`);
-      return () => log.push(`clean:${v}`);
-    });
-    s.set(1);
-    s.set(2);
-    dispose();
-    assert(
-      log.join(",") === "run:0,clean:0,run:1,clean:1,run:2,clean:2",
-      `got ${log.join(",")}`,
-    );
-  }, results);
-
-  test("effect allows signal writes by default", () => {
-    const source = signal(0);
-    const target = signal(0);
-    const dispose = effect(() => {
-      const next = source();
-      if (next > 0) {
-        target.set(next * 10);
-      }
-    });
-    source.set(3);
-    assert(target() === 30, `expected propagated write, got ${target()}`);
-    dispose();
-  }, results);
-
-  test("effect can disallow signal writes", () => {
-    const source = signal(0);
-    const target = signal(0);
-    const dispose = effect(() => {
-      const next = source();
-      if (next > 0) {
-        target.set(next);
-      }
-    }, { allowSignalWrites: false });
-
-    let threw = false;
-    try {
-      source.set(1);
-    } catch (error) {
-      threw = (error as Error).message === "Signal writes are not allowed in this effect.";
-    }
-
-    assert(threw, "expected write to throw when disallowed");
-    assert(target() === 0, `target should remain unchanged, got ${target()}`);
-    dispose();
-  }, results);
-
-  test("effect scheduler defers and coalesces reruns", () => {
-    const source = signal(0);
-    const seen: number[] = [];
-    const queue: Array<() => void> = [];
-    const dispose = effect(() => {
-      seen.push(source());
-    }, {
-      scheduler: (run) => {
-        queue.push(run);
-      },
-    });
-
-    assert(seen.join(",") === "0", `initial run should be synchronous, got ${seen.join(",")}`);
-    source.set(1);
-    source.set(2);
-    assert(queue.length === 1, `expected one scheduled rerun, got ${queue.length}`);
-    assert(seen.join(",") === "0", `rerun should be deferred, got ${seen.join(",")}`);
-
-    const run = queue.shift();
-    assert(typeof run === "function", "expected scheduled callback");
-    run?.();
-
-    assert(seen.join(",") === "0,2", `expected coalesced rerun, got ${seen.join(",")}`);
-    dispose();
-  }, results);
-
-  test("effect accepts manualCleanup option without changing disposal", () => {
-    const s = signal(0);
-    const log: string[] = [];
-    const dispose = effect(() => {
-      const v = s();
-      log.push(`run:${v}`);
-      return () => log.push(`clean:${v}`);
-    }, { manualCleanup: true });
-
-    s.set(1);
-    dispose();
-
-    assert(
-      log.join(",") === "run:0,clean:0,run:1,clean:1",
-      `got ${log.join(",")}`,
-    );
-  }, results);
-
-  test("linkedSignal derives from source and is writable", () => {
+describe('linkedSignal', () => {
+  it('derives from source and is writable', () => {
     const source = signal(1);
     const linked = linkedSignal(() => source() * 10);
-    assert(linked() === 10, "initial derivation");
+    expect(linked()).toBe(10);
     linked.set(999);
-    assert(linked() === 999, "local override");
+    expect(linked()).toBe(999);
     source.set(2);
-    assert(linked() === 20, "resets when source changes");
-  }, results);
+    expect(linked()).toBe(20);
+  });
 
-  test("linkedSignal computation receives previous state", () => {
-    const list = signal(["a", "b", "c"]);
+  it('computation receives previous state', () => {
+    const list = signal(['a', 'b', 'c']);
     const selection = linkedSignal<string[], string>({
       source: () => list(),
       computation: (items, prev) => {
@@ -291,62 +304,64 @@ export function runTests(): TestResult[] {
         return items[0];
       },
     });
-    assert(selection() === "a", "initial");
-    selection.set("b");
-    list.set(["a", "b", "c", "d"]);
-    assert(selection() === "b", "preserved when still valid");
-    list.set(["x", "y"]);
-    assert(selection() === "x", "reset when invalid");
-  }, results);
+    expect(selection()).toBe('a');
+    selection.set('b');
+    list.set(['a', 'b', 'c', 'd']);
+    expect(selection()).toBe('b');
+    list.set(['x', 'y']);
+    expect(selection()).toBe('x');
+  });
+});
 
-  test("optimistic overlays source and tracks pending state", () => {
+describe('optimistic', () => {
+  it('overlays source and tracks pending state', () => {
     const base = signal(1);
     const overlay = optimistic(base);
 
-    assert(overlay() === 1, "initial value");
-    assert(overlay.hasPending() === false, "starts without pending layers");
-    assert(overlay.pendingCount() === 0, "starts with zero pending layers");
+    expect(overlay()).toBe(1);
+    expect(overlay.hasPending()).toBe(false);
+    expect(overlay.pendingCount()).toBe(0);
 
     const tx = overlay.apply((value) => value + 2);
-    assert(overlay() === 3, "applies optimistic patch");
-    assert(overlay.hasPending() === true, "tracks pending state");
-    assert(overlay.pendingCount() === 1, "tracks pending count");
+    expect(overlay()).toBe(3);
+    expect(overlay.hasPending()).toBe(true);
+    expect(overlay.pendingCount()).toBe(1);
 
     tx.rollback();
-    assert(overlay() === 1, "rollback restores source value");
-    assert(overlay.hasPending() === false, "rollback clears pending state");
-  }, results);
+    expect(overlay()).toBe(1);
+    expect(overlay.hasPending()).toBe(false);
+  });
 
-  test("optimistic rebases on source updates while pending", () => {
+  it('rebases on source updates while pending', () => {
     const base = signal(10);
     const overlay = optimistic(base);
 
     overlay.apply((value) => value + 1);
-    assert(overlay() === 11, "initial optimistic projection");
+    expect(overlay()).toBe(11);
 
     base.set(20);
-    assert(overlay() === 21, "rebases overlay on latest source value");
-  }, results);
+    expect(overlay()).toBe(21);
+  });
 
-  test("optimistic supports overlapping layers and selective rollback", () => {
+  it('supports overlapping layers and selective rollback', () => {
     const base = signal(0);
     const overlay = optimistic(base);
 
     const first = overlay.apply((value) => value + 1);
     const second = overlay.apply((value) => value + 10);
 
-    assert(overlay() === 11, `expected stacked optimistic value, got ${overlay()}`);
-    assert(overlay.pendingCount() === 2, `expected two pending layers, got ${overlay.pendingCount()}`);
+    expect(overlay()).toBe(11);
+    expect(overlay.pendingCount()).toBe(2);
 
     first.rollback();
-    assert(overlay() === 10, `expected second layer to remain, got ${overlay()}`);
-    assert(overlay.pendingCount() === 1, `expected one pending layer, got ${overlay.pendingCount()}`);
+    expect(overlay()).toBe(10);
+    expect(overlay.pendingCount()).toBe(1);
 
     second.rollback();
-    assert(overlay() === 0, `expected rollback to restore source, got ${overlay()}`);
-  }, results);
+    expect(overlay()).toBe(0);
+  });
 
-  test("optimistic commit can update the base signal without a transient rollback", () => {
+  it('commit can update the base signal without a transient rollback', () => {
     const base = signal(0);
     const overlay = optimistic(base);
     const seen: number[] = [];
@@ -357,52 +372,46 @@ export function runTests(): TestResult[] {
     const tx = overlay.apply((value) => value + 1);
     tx.commit(5);
 
-    assert(base() === 5, `expected base to update on commit, got ${base()}`);
-    assert(overlay() === 5, `expected overlay to settle to committed base, got ${overlay()}`);
-    assert(seen.join(",") === "0,1,5", `commit should not flicker, got ${seen.join(",")}`);
+    expect(base()).toBe(5);
+    expect(overlay()).toBe(5);
+    expect(seen.join(',')).toBe('0,1,5');
     dispose();
-  }, results);
+  });
 
-  test("optimistic rollback preserves other committed transactions", () => {
+  it('rollback preserves other committed transactions', () => {
     const base = signal(42);
     const overlay = optimistic(base);
 
     const committed = overlay.apply((value) => value + 1);
     const rejected = overlay.apply((value) => value + 1);
 
-    assert(overlay() === 44, `expected two pending layers, got ${overlay()}`);
+    expect(overlay()).toBe(44);
 
     committed.commit((value) => value + 1);
-    assert(base() === 43, `expected committed base update, got ${base()}`);
-    assert(overlay() === 44, `expected remaining optimistic layer on top of committed base, got ${overlay()}`);
+    expect(base()).toBe(43);
+    expect(overlay()).toBe(44);
 
     rejected.rollback();
-    assert(base() === 43, `rollback should not undo committed base updates, got ${base()}`);
-    assert(overlay() === 43, `rollback should settle to latest base, got ${overlay()}`);
-  }, results);
+    expect(base()).toBe(43);
+    expect(overlay()).toBe(43);
+  });
 
-  test("optimistic clear removes layers and invalidates stale transactions", () => {
+  it('clear removes layers and invalidates stale transactions', () => {
     const base = signal(2);
     const overlay = optimistic(base);
     const tx = overlay.apply((value) => value + 5);
 
     overlay.clear();
-    assert(overlay() === 2, "clear should drop optimistic layers");
-    assert(overlay.pendingCount() === 0, "clear should reset pending count");
+    expect(overlay()).toBe(2);
+    expect(overlay.pendingCount()).toBe(0);
 
     tx.commit(9);
-    assert(base() === 2, "stale transactions should not update base after clear");
-  }, results);
+    expect(base()).toBe(2);
+  });
+});
 
-  return results;
-}
-
-export async function runAsyncTests(): Promise<TestResult[]> {
-  const results: TestResult[] = [];
-  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-  // resource: basic load
-  try {
+describe('resource', () => {
+  it('loads and reacts to request', async () => {
     const id = signal(1);
     const r = resource({
       request: () => id(),
@@ -411,57 +420,42 @@ export async function runAsyncTests(): Promise<TestResult[]> {
         return `data-${request}`;
       },
     });
-    assert(r.hasValue() === false, "starts without value");
-    assert(r.status() === "loading", "starts loading");
-    assert(r.isLoading() === true, "isLoading tracks initial load");
-    assert(r.isRefreshing() === false, "initial load is not refreshing");
+    expect(r.hasValue()).toBe(false);
+    expect(r.status()).toBe('loading');
+    expect(r.isLoading()).toBe(true);
+    expect(r.isRefreshing()).toBe(false);
     await wait(40);
-    assert(r.status() === "resolved", `resolves; got ${r.status()}`);
-    assert(r.value() === "data-1", `value=${r.value()}`);
-    assert(r.hasValue() === true, "hasValue becomes true after resolve");
-    assert(r.isLoading() === false, "stops loading after resolve");
+    expect(r.status()).toBe('resolved');
+    expect(r.value()).toBe('data-1');
+    expect(r.hasValue()).toBe(true);
+    expect(r.isLoading()).toBe(false);
     id.set(2);
-    assert(r.status() === "loading", "request change starts reload");
-    assert(r.value() === "data-1", "preserves previous value while reloading");
-    assert(r.isRefreshing() === true, "reload with value is refreshing");
+    expect(r.status()).toBe('loading');
+    expect(r.value()).toBe('data-1');
+    expect(r.isRefreshing()).toBe(true);
     await wait(40);
-    assert(r.value() === "data-2", "reacts to request change");
-    assert(r.isRefreshing() === false, "refreshing ends after resolve");
+    expect(r.value()).toBe('data-2');
+    expect(r.isRefreshing()).toBe(false);
     r.destroy();
-    results.push({ name: "resource loads and reacts to request", passed: true });
-  } catch (e) {
-    results.push({
-      name: "resource loads and reacts to request",
-      passed: false,
-      error: (e as Error).message,
-    });
-  }
+  });
 
-  // resource: error path
-  try {
+  it('captures errors', async () => {
     const r = resource({
       request: () => 1,
+      // eslint-disable-next-line @typescript-eslint/require-await
       loader: async () => {
-        throw new Error("boom");
+        throw new Error('boom');
       },
     });
     await wait(20);
-    assert(r.status() === "error", `status=${r.status()}`);
-    assert((r.error() as Error).message === "boom", "captures error");
-    assert(r.hasValue() === false, "failed initial load does not create a value");
-    assert(r.isRefreshing() === false, "error after empty load is not refreshing");
+    expect(r.status()).toBe('error');
+    expect((r.error() as Error).message).toBe('boom');
+    expect(r.hasValue()).toBe(false);
+    expect(r.isRefreshing()).toBe(false);
     r.destroy();
-    results.push({ name: "resource captures errors", passed: true });
-  } catch (e) {
-    results.push({
-      name: "resource captures errors",
-      passed: false,
-      error: (e as Error).message,
-    });
-  }
+  });
 
-  // resource: aborts stale requests
-  try {
+  it('aborts stale requests', async () => {
     const id = signal(1);
     const seen: number[] = [];
     const r = resource({
@@ -469,10 +463,10 @@ export async function runAsyncTests(): Promise<TestResult[]> {
       loader: async ({ request, abortSignal }) => {
         await new Promise((resolve, reject) => {
           const t = setTimeout(resolve, 30);
-          abortSignal.addEventListener("abort", () => {
+          abortSignal.addEventListener('abort', () => {
             clearTimeout(t);
-            const err = new Error("aborted");
-            err.name = "AbortError";
+            const err = new Error('aborted');
+            err.name = 'AbortError';
             reject(err);
           });
         });
@@ -483,19 +477,13 @@ export async function runAsyncTests(): Promise<TestResult[]> {
     id.set(2);
     id.set(3);
     await wait(80);
-    assert(r.value() === 3, `final value=${r.value()}`);
-    assert(seen.length === 1 && seen[0] === 3, `only latest resolved, got ${seen.join(",")}`);
+    expect(r.value()).toBe(3);
+    expect(seen.length).toBe(1);
+    expect(seen[0]).toBe(3);
     r.destroy();
-    results.push({ name: "resource aborts stale requests", passed: true });
-  } catch (e) {
-    results.push({
-      name: "resource aborts stale requests",
-      passed: false,
-      error: (e as Error).message,
-    });
-  }
+  });
 
-  try {
+  it('keeps stale value during and after failed refresh', async () => {
     const id = signal(1);
     let shouldFail = false;
     const r = resource({
@@ -510,49 +498,34 @@ export async function runAsyncTests(): Promise<TestResult[]> {
     });
 
     await wait(30);
-    assert(r.value() === "data-1", `expected initial value, got ${r.value()}`);
-    assert(r.hasValue() === true, "resolved value should be present");
+    expect(r.value()).toBe('data-1');
+    expect(r.hasValue()).toBe(true);
 
     shouldFail = true;
     id.set(2);
-    assert(r.isRefreshing() === true, "reload should expose refreshing while stale value is kept");
-    assert(r.value() === "data-1", "stale value should remain during failing reload");
+    expect(r.isRefreshing()).toBe(true);
+    expect(r.value()).toBe('data-1');
     await wait(30);
 
-    assert(r.status() === "error", `expected error status, got ${r.status()}`);
-    assert(r.value() === "data-1", "stale value should remain after failed reload");
-    assert(r.hasValue() === true, "failed refresh should keep hasValue true");
-    assert((r.error() as Error).message === "boom-2", "captures refresh error");
-    assert(r.isRefreshing() === false, "refreshing ends after failed reload");
+    expect(r.status()).toBe('error');
+    expect(r.value()).toBe('data-1');
+    expect(r.hasValue()).toBe(true);
+    expect((r.error() as Error).message).toBe('boom-2');
+    expect(r.isRefreshing()).toBe(false);
     r.destroy();
-    results.push({ name: "resource keeps stale value during and after failed refresh", passed: true });
-  } catch (e) {
-    results.push({
-      name: "resource keeps stale value during and after failed refresh",
-      passed: false,
-      error: (e as Error).message,
-    });
-  }
+  });
 
-  try {
+  it('hasValue tracks manual writes independently of value contents', () => {
     const r = resource<undefined, string>({
       request: () => undefined,
-      loader: async () => "",
+      // eslint-disable-next-line @typescript-eslint/require-await
+      loader: async () => '',
     });
 
-    assert(r.hasValue() === false, "manual seed starts empty");
+    expect(r.hasValue()).toBe(false);
     r.set(undefined);
-    assert(r.hasValue() === true, "manual set marks resource as having a value");
-    assert(r.isRefreshing() === false, "manual seed is not refreshing");
+    expect(r.hasValue()).toBe(true);
+    expect(r.isRefreshing()).toBe(false);
     r.destroy();
-    results.push({ name: "resource hasValue tracks manual writes independently of value contents", passed: true });
-  } catch (e) {
-    results.push({
-      name: "resource hasValue tracks manual writes independently of value contents",
-      passed: false,
-      error: (e as Error).message,
-    });
-  }
-
-  return results;
-}
+  });
+});

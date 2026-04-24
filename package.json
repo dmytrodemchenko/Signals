@@ -12,6 +12,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./min": {
+      "import": "./dist/index.min.js",
+      "default": "./dist/index.min.js"
     }
   },
   "files": [
@@ -25,9 +29,17 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "rm -rf dist && ./node_modules/.bin/tsc -p tsconfig.json",
-    "check": "./node_modules/.bin/tsc --noEmit --pretty false",
-    "prepack": "npm run build"
+    "build": "vite build && MINIFY=true vite build && node scripts/minify.js && tsc --emitDeclarationOnly",
+    "build:debug": "vite build --minify false && tsc --emitDeclarationOnly",
+    "check": "tsc --noEmit --pretty false",
+    "prepack": "npm run build",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "signals",
@@ -35,9 +47,20 @@
     "state",
     "typescript"
   ],
-  "dependencies": {},
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "@types/node": "^25.6.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.0",
+    "@typescript-eslint/parser": "^8.59.0",
+    "@vitest/coverage-v8": "^4.1.5",
+    "esbuild": "^0.28.0",
+    "eslint": "^10.2.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "prettier": "^3.8.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.0",
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^4.1.5"
   },
   "engines": {
     "node": ">=18"

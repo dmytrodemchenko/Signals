@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Signals</title>
+    <title>Signals | Demchenko MD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -13,8 +16,10 @@
         <div>
           <h1>Signals</h1>
           <p>Reactive primitives for JavaScript.</p>
+          <p style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.8;">
+            <strong>Note:</strong> Demo requires build step first (imports from <code>dist/</code>).
+          </p>
         </div>
-        <button id="run-tests" class="primary" type="button">Run tests</button>
       </header>
 
       <nav class="tab-nav" role="tablist" aria-label="Sections">
@@ -72,7 +77,9 @@ draft()</code></pre>
           <h2>linkedSignal() · Live</h2>
           <div class="stack">
             <p>Draft follows base but stays writable. Changing base resets the draft.</p>
-            <div id="linked-console" class="console"></div>
+            <pre class="code-sample">
+              <code id="linked-console" class="console language-javascript"></code>
+            </pre>
             <div class="controls">
               <button id="draft-up" class="primary" type="button">draft += 1</button>
               <button id="base-up" type="button">base += 100 (resets draft)</button>
@@ -128,14 +135,6 @@ draft()</code></pre>
               <button id="optimistic-sync" type="button">server sync +5</button>
             </div>
             <div id="optimistic-console" class="console optimistic-trace"></div>
-          </div>
-        </article>
-
-        <article class="card">
-          <h2>Test Results</h2>
-          <div class="stack">
-            <p>Core signal behavior from the distributed build.</p>
-            <ul id="test-results" class="results"></ul>
           </div>
         </article>
       </div>
