@@ -16,16 +16,16 @@ export {
   type SignalOptions,
   type ValueEqualityFn,
   type WriteSignal,
-} from "./signals.js";
+} from './signals.js';
 
-export { linkedSignal, type LinkedSignal, type LinkedSignalOptions } from "./linked-signal.js";
+export { linkedSignal, type LinkedSignal, type LinkedSignalOptions } from './linked-signal.js';
 
 export {
   optimistic,
   type OptimisticPatch,
   type OptimisticSignal,
   type OptimisticTransaction,
-} from "./optimistic.js";
+} from './optimistic.js';
 
 export {
   resource,
@@ -33,4 +33,4 @@ export {
   type ResourceOptions,
   type ResourceStatus,
   type ResourceLoaderParams,
-} from "./resource.js";
+} from './resource.js';

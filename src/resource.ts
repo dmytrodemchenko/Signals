@@ -3,9 +3,9 @@
  * stale loads are aborted via AbortSignal. Exposes value/error/status as
  * read signals plus imperative set/update/reload/destroy.
  */
-import { signal, computed, effect, untracked, type ReadSignal } from "./signals.js";
+import { signal, computed, effect, untracked, type ReadSignal } from './signals.js';
 
-export type ResourceStatus = "idle" | "loading" | "resolved" | "error";
+export type ResourceStatus = 'idle' | 'loading' | 'resolved' | 'error';
 
 export interface ResourceLoaderParams<R> {
   request: R;
@@ -33,7 +33,7 @@ export interface Resource<T> {
 }
 
 function isAbortError(err: unknown): boolean {
-  return (err as { name?: string } | null)?.name === "AbortError";
+  return (err as { name?: string } | null)?.name === 'AbortError';
 }
 
 export function resource<R, T>(options: ResourceOptions<R, T>): Resource<T> {
@@ -41,7 +41,7 @@ export function resource<R, T>(options: ResourceOptions<R, T>): Resource<T> {
 
   const value = signal<T | undefined>(undefined);
   const error = signal<unknown>(undefined);
-  const status = signal<ResourceStatus>("idle");
+  const status = signal<ResourceStatus>('idle');
   const hasValue = signal(false);
   const reloadTick = signal(0);
 
@@ -62,7 +62,7 @@ export function resource<R, T>(options: ResourceOptions<R, T>): Resource<T> {
     const myId = ++requestId;
 
     const prevStatus = untracked(status);
-    status.set("loading");
+    status.set('loading');
     error.set(undefined);
 
     untracked(() =>
@@ -70,7 +70,7 @@ export function resource<R, T>(options: ResourceOptions<R, T>): Resource<T> {
         request: req,
         abortSignal: controller.signal,
         previous: { status: prevStatus },
-      }),
+      })
     ).then(
       (result) => {
         if (myId !== requestId) {
@@ -78,21 +78,21 @@ export function resource<R, T>(options: ResourceOptions<R, T>): Resource<T> {
         }
         value.set(result);
         hasValue.set(true);
-        status.set("resolved");
+        status.set('resolved');
       },
       (err) => {
         if (myId !== requestId || isAbortError(err)) {
           return;
         }
         error.set(err);
-        status.set("error");
-      },
+        status.set('error');
+      }
     );
 
     return () => controller.abort();
   });
 
-  const isLoading = computed(() => status() === "loading");
+  const isLoading = computed(() => status() === 'loading');
   const isRefreshing = computed(() => isLoading() && hasValue());
 
   return {
