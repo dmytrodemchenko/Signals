@@ -1,6 +1,6 @@
 {
   "name": "@demchenko.di/signals",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Zero-dependency reactive signals for TypeScript and JavaScript.",
   "license": "MIT",
   "type": "module",
@@ -47,6 +47,9 @@
     "state",
     "typescript",
     "nodejs",
+    "node.js",
+    "nestjs",
+    "nest.js",
     "angular",
     "javascript",
     "RxJS",
